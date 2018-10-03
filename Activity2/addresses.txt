@@ -1,0 +1,4 @@
+google.com
+bbc.co.uk
+amazon.com
+rit.edu
