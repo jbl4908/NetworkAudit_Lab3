@@ -2,6 +2,7 @@
 
 from scapy.all import *
 import ipaddress
+import sys
 
 def main():
     subnet = None
@@ -18,10 +19,22 @@ def main():
     scan = raw_input("Enter the scan you would like to perform: ")
     if scan == '1':
         subnet = raw_input("Enter subnet you would like to search: ")
-    else:
+        destination_ip=[]
+        try:
+            network = ipaddress.IPv4Network(unicode(subnet))
+        except ValueError, e:
+            print("illegal subnet")
+            print("Exception: %s" % str(e))
+            sys.exit(1)
+        for ip in network:
+            destination_ip.append(str(ip))
+    elif int(scan)>=2 and int(scan)<=7:
         ips = raw_input("Enter IP address range(Ex. x or x,x or x-x or x/x): ")
         ports = raw_input("Enter port range(Ex. x or x,x or x-x): ")
         destination_ip, destination_ports = build_lists(ips, ports)
+    else:
+        print("Choice entered is invalid, aborting")
+        sys.exit(1)
 
     if scan == '1':
         arp_scan(subnet)
@@ -45,38 +58,65 @@ def build_lists(ips, ports):
     if ',' in ips:
         ip = ips.split(',')
         for i in ip:
+            is_valid_ip(i)
             destination_ip.append(i)
     elif '-' in ips:
         ip = ips.split('-')
-        start = int(ipaddress.IPv4Address(unicode(ip[0])))
-        end = int(ipaddress.IPv4Address(unicode(ip[1])))
+        start = is_valid_ip(ip[0])
+        end = is_valid_ip(ip[1])
         for x in range(start, end+1):
-            cur_ip = ipaddress.IPv4Address(x)
+            try:
+                cur_ip = ipaddress.IPv4Address(x)
+            except ipaddress.AddressValueError, e:
+                print("invalid IP address")
+                print("Exception: %s" % str(e))
+                sys.exit(1)
             print(str(cur_ip))
             destination_ip.append(str(cur_ip))
-        #for i in range(ip[0], ip[1]):
     elif '/' in ips:
-        for ip in ipaddress.IPv4Network(unicode(ips)):
-            print(str(ip))
+        try:
+            network = ipaddress.IPv4Network(unicode(ips))
+        except ValueError, e:
+            print("illegal subnet")
+            print("Exception: %s" % str(e))
+            sys.exit(1)
+        for ip in network:
             destination_ip.append(str(ip))
     else:
+        is_valid_ip(ips)
         destination_ip.append(ips)
 
     if ',' in ports:
         port = ports.split(',')
         for i in port:
-            destination_ports.append(int(i))
+            destination_ports.append(is_digit(i))
     elif '-' in ports:
         port = ports.split('-')
-        start = int(port[0])
-        end = int(port[1])
+        start = is_digit(port[0])
+        end = is_digit(port[1])
         while(start <= end):
             destination_ports.append(start)
             start+=1
     else:
-        destination_ports.append(int(ports))
+        destination_ports.append(is_digit(ports))
 
     return (destination_ip, destination_ports)
+
+def is_digit(digit):
+    if digit.isdigit():
+        return int(digit)
+    else:
+        print("invalid port entered, aborting")
+        sys.exit(1)
+
+def is_valid_ip(ip):
+    try:
+        ip = int(ipaddress.IPv4Address(unicode(ip)))
+        return ip
+    except ipaddress.AddressValueError, e:
+        print("invalid IP address")
+        print("Exception: %s" % str(e))
+        sys.exit(1)
 
 def arp_scan(subnet):
     packets = arping(subnet)
@@ -84,21 +124,23 @@ def arp_scan(subnet):
 def connect_scan(destination_ip, destination_ports):
     for ip in destination_ip:
         for port in destination_ports:
-            packet = sr1(IP(dst=ip)/TCP(flags="S", dport=port))
-            if packet[TCP].flags == "SA":
-                print("Port: " + str(port) + " is open")
-                packet = send(IP(dst=ip)/TCP(flags="A", dport=port))
-                packet = send(IP(dst=ip)/TCP(flags="RA", dport=port))
+            packet = sr1(IP(dst=ip)/TCP(flags="S", dport=port), retry=2, timeout=5)
+            if packet != None:
+                if packet[TCP].flags == "SA":
+                    print("Port: " + str(port) + " is open")
+                    packet = send(IP(dst=ip)/TCP(flags="A", dport=port),retry=2, timeout=5)
+                    packet = send(IP(dst=ip)/TCP(flags="RA", dport=port),retry=2, timeout=5)
             else:
                 print("Port: " + str(port) + " is closed")
 
 def syn_scan(destination_ip, destination_ports):
     for ip in destination_ip:
         for port in destination_ports:
-            packet = sr1(IP(dst=ip)/TCP(flags="S", dport=port))
-            if packet[TCP].flags == "SA":
-                packet = send(IP(dst=ip)/TCP(flags="R", dport=port))
-                print("Port: " + str(port) + " is open")
+            packet = sr1(IP(dst=ip)/TCP(flags="S", dport=port), retry=2, timeout=5)
+            if packet != None:
+                if packet[TCP].flags == "SA":
+                    packet = send(IP(dst=ip)/TCP(flags="R", dport=port), retry=2, timeout=5)
+                    print("Port: " + str(port) + " is open")
             else:
                 print("Port: " + str(port) + " is closed")
 
@@ -106,16 +148,17 @@ def syn_scan(destination_ip, destination_ports):
 def fin_scan(destination_ip, destination_ports):
     for ip in destination_ip:
         for port in destination_ports:
-            packet = sr1(IP(dst=ip)/TCP(flags="F", dport=port))
-            if packet[TCP].flags == "R":
-                print("Port: " + str(port) + " is closed or on a Windows device")
+            packet = sr1(IP(dst=ip)/TCP(flags="F", dport=port), retry=2, timeout=5)
+            if packet != None:
+                if packet[TCP].flags == "R":
+                    print("Port: " + str(port) + " is closed or on a Windows device")
             elif packet == None:
                 print("Port: " + str(port) + " is open")
 
 def xmas_scan(destination_ip, destination_ports):
     for ip in destination_ip:
         for port in destination_ports:
-            packet = sr1(IP(dst=ip)/TCP(flags="FPU", dport=port))
+            packet = sr1(IP(dst=ip)/TCP(flags="FPU", dport=port), retry=2, timeout=5)
             if packet == None:
                 print("Port: " + str(port) + " is open")
             elif packet[TCP].flags == "R":
@@ -124,7 +167,7 @@ def xmas_scan(destination_ip, destination_ports):
 def ack_scan(destination_ip, destination_ports):
     for ip in destination_ip:
         for port in destination_ports:
-            packet = sr1(IP(dst=ip)/TCP(flags="A", dport=port, seq=12345), timeout=2)
+            packet = sr1(IP(dst=ip)/TCP(flags="A", dport=port, seq=12345), retry=2, timeout=5)
             if packet == None:
                 print("Port: " + str(port) + " is filtered")
             elif packet[IP].proto == 6: # 6 corresponds to TCP
@@ -134,12 +177,11 @@ def ack_scan(destination_ip, destination_ports):
 def udp_scan(destination_ip, destination_ports):
     for ip in destination_ip:
         for port in destination_ports:
-            packet = sr1(IP(dst=ip)/UDP(dport=port), retry=2, timeout=10)
+            packet = sr1(IP(dst=ip)/UDP(dport=port), retry=2, timeout=5)
             if packet == None:
                 print("Port: " + str(port) + " is open/filtered")
             elif packet[IP].proto == 1: # 1 corresponds to ICMP
                 print("Port: " + str(port) + " is closed")
             elif packet[IP].proto == 'udp':
                 print("Port: " + str(port) + " is open")
-            #packet.show()
 main()
