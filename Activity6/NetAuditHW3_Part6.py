@@ -128,19 +128,23 @@ def connect_scan(destination_ip, destination_ports):
             if packet != None:
                 if packet[TCP].flags == "SA":
                     print("Port: " + str(port) + " is open")
-                    packet = send(IP(dst=ip)/TCP(flags="A", dport=port),retry=2, timeout=5)
-                    packet = send(IP(dst=ip)/TCP(flags="RA", dport=port),retry=2, timeout=5)
+                    packet = send(IP(dst=ip)/TCP(flags="A", dport=port))
+                    packet = send(IP(dst=ip)/TCP(flags="RA", dport=port))
+		else:
+			print("Port: " is str(port) + " is closed")
             else:
                 print("Port: " + str(port) + " is closed")
 
 def syn_scan(destination_ip, destination_ports):
     for ip in destination_ip:
         for port in destination_ports:
-            packet = sr1(IP(dst=ip)/TCP(flags="S", dport=port), retry=2, timeout=5)
+            packet = sr1(IP(dst=ip)/TCP(flags="S", dport=port), timeout=5)
             if packet != None:
                 if packet[TCP].flags == "SA":
-                    packet = send(IP(dst=ip)/TCP(flags="R", dport=port), retry=2, timeout=5)
+                    packet = send(IP(dst=ip)/TCP(flags="R", dport=port))
                     print("Port: " + str(port) + " is open")
+		else:
+			print("Port: " + str(port) + " is closed")
             else:
                 print("Port: " + str(port) + " is closed")
 
@@ -150,7 +154,7 @@ def fin_scan(destination_ip, destination_ports):
         for port in destination_ports:
             packet = sr1(IP(dst=ip)/TCP(flags="F", dport=port), retry=2, timeout=5)
             if packet != None:
-                if packet[TCP].flags == "R":
+                if packet[TCP].flags == "R" or packet[TCP].flags == "RA":
                     print("Port: " + str(port) + " is closed or on a Windows device")
             elif packet == None:
                 print("Port: " + str(port) + " is open")
@@ -161,7 +165,7 @@ def xmas_scan(destination_ip, destination_ports):
             packet = sr1(IP(dst=ip)/TCP(flags="FPU", dport=port), retry=2, timeout=5)
             if packet == None:
                 print("Port: " + str(port) + " is open")
-            elif packet[TCP].flags == "R":
+            elif packet[TCP].flags == "R" or packet[TCP].flags == "RA":
                 print("Port: " + str(port) + " is closed or on a Windows device")
 
 def ack_scan(destination_ip, destination_ports):
@@ -171,7 +175,7 @@ def ack_scan(destination_ip, destination_ports):
             if packet == None:
                 print("Port: " + str(port) + " is filtered")
             elif packet[IP].proto == 6: # 6 corresponds to TCP
-                if packet[TCP].flags == "R":
+                if packet[TCP].flags == "R" or packet[TCP].flags == "RA":
                     print("Port: " + str(port) + " is unfiltered")
 
 def udp_scan(destination_ip, destination_ports):
