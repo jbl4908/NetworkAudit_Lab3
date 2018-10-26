@@ -1,0 +1,10 @@
+---
+- name: Downloading osquery on Ubuntu
+  hosts: ubuntu
+  remote_user: jasonmarcello
+
+  tasks:
+    - name: install osquery
+      shell: sudo apt-get install osquery
+      register: output
+    - debug: var=output.stdout_lines
